@@ -1,0 +1,218 @@
+#!/usr/bin/perl
+
+require 5.12.0;
+use strict;
+
+my $function1;
+
+my @exponents;
+my @coefficients;
+my @variables;
+
+	# print "Function to differentiate w.r.t. x:\n";
+$function1 = <STDIN>;
+# print "Differentiate with respect to what variable?\n"; # <-- future poss. feature.
+
+# Assumes input is sums / differences of (coefficient times x^n).
+$function1 = &sanitize_plus_minuses($function1);
+$function1 = &subtraction_replacement($function1);
+
+my @function_terms = &split_terms($function1);
+@function_terms = &strip_whitespace(@function_terms);
+
+	#foreach my $term (@function_terms) { print "$term\n"; }
+
+my @exponents, @coefficients, @variables;
+
+@exponents = &strip_exponents(@function_terms);
+@coefficients = &strip_coefficients(@function_terms);
+@variables = &strip_variables(@function_terms);
+
+my @deriv_exps; my @deriv_coeffs; my @deriv_vars;
+
+@deriv_vars = @variables; # Assuming "nice" input for now.
+
+while ((my $index1, my $cur_exp) = each (@exponents)) { # This one's gonna be the "limiting reagent"!
+	push @deriv_coeffs, $cur_exp * $coefficients[$index1];
+	push @deriv_exps, $cur_exp-1;
+}
+
+# unicode_exponents
+foreach (@deriv_exps) { &pretty_exponents($_); }
+
+while ((my $index2, my $cur_d_exp) = each (@deriv_exps)) {
+	# print "$deriv_coeffs[$index2]*$deriv_vars[$index2]^$cur_d_exp + " ; } 
+	print "$deriv_coeffs[$index2]*$deriv_vars[$index2]$cur_d_exp" ; 
+	if ($index2 != $#deriv_exps) {print " + ";}
+} 
+print "\n";
+
+
+sub subtraction_replacement {
+	my $function_to_edit = $_[0];
+	$function_to_edit =~ s/([^+])\s+\-\s*/$1\ \+\ \-/g;
+	#$function_to_edit =~ s/([^+])\s*\-\s*/$1\ \+\ \-/g;
+	print $function_to_edit;
+	return $function_to_edit;
+}
+
+# Its input will have "+" between each term.
+# That is, "x - 5" will look like "x + - 5"!
+sub split_terms { 
+	# "Sketchy" append "+" to the end - provides pattern-matching uniformity!!
+	$_[0] =~ s/$/+/;
+	# my @terms = ($_[0] =~ /.*[+-]/g);
+	# $terms[$#terms] = s/+$//; Doesn't quite work.
+	my @list_o_terms;
+        @list_o_terms = split /\s*\+\s*/g, $_[0]; 
+	# Split along addition symbols. Also ditch surrounding whitespace. ("\s")
+		#print "List is: @list_o_terms\n";
+	@list_o_terms;
+}
+
+sub strip_whitespace { 
+	my @list_o_terms;
+	while ((my $i, my $current_term) = each (@_)) {
+		$_ = $current_term;
+		$list_o_terms[$i] = $current_term;
+		$list_o_terms[$i] =~ s/\s*//g;
+	}
+	@list_o_terms;
+}
+
+sub strip_exponents {
+	my @list_o_exps;
+	# print "putting exponents in a list.\n";
+	while ((my $i, my $current_term) = each (@_)) { 
+		$_ = $current_term;
+		$list_o_exps[$i] = $current_term;
+		if (m/\^/ == undef) { # If there's no "^" in here. 
+			# THIS WILL assume the variable is x.
+			if (/x/) { $list_o_exps[$i] = 1; }
+			else { $list_o_exps[$i] = 0; }
+		}
+		else { $list_o_exps[$i] =~ s/.*\^(.*)/$1/; }
+	}
+	@list_o_exps;
+}
+
+sub strip_coefficients {
+	my @list_o_coeffs;
+	while ((my $i, my $current_term) = each (@_)) { 
+		$_ = $current_term;
+		$list_o_coeffs[$i] = $current_term;
+		if (m/[0-9]+.*x/ == undef) { # the term is "x", "-x", or a constant.
+			if (m/x/ == undef) { $list_o_coeffs[$i] = $current_term; }
+			# ^ Constant term.
+			else {	# Input is sanitized so each term has <= 1 "-".
+				if (m/[-]/) { $list_o_coeffs[$i] = -1; }
+				else { $list_o_coeffs[$i] = 1; }
+			}
+		}
+		else {
+			$list_o_coeffs[$i] = $current_term;
+			$list_o_coeffs[$i] =~ s/(.*)x.*$/$1/;
+		}
+#		print "Cur. coefficient: $list_o_coeffs[$i]\t";
+#		if (m/[^0-9|\.|-]/) {
+#			print "Needs calcd: $list_o_coeffs[$i]\n";
+#		}
+	}
+	return @list_o_coeffs;
+}
+
+sub strip_variables { # Actually just substitutes 'x' for each list member.
+	my @list_o_vars;
+	for (my $i = 0; $i <= $#_; $i++) { $list_o_vars[$i] = 'x';}
+	@list_o_vars;
+}
+
+sub sanitize_plus_minuses { # This one deals with the "x - + - -2" problem.
+	# my $plusses_followed_by_minusess = $_[0];
+	$_ = $_[0];
+
+	# Loop as long as there is a "+-" OR "-+" OR "--" OR "++".
+	while (m/\+\s*\-/ || m/\-\s*\+/ || m/\-\s*\-/ || m/\+\s*\+/ ) {
+		s/\+\s*-/-/g; s/\-\s*\+/\-/g; # Replace "+-" or "-+" w/ "-"
+		s/\-\s*\-/\+/g; s/\+\s*\+/\+/g; # Replace "--" or "++" w/ "+"
+	}
+	return $_;
+}
+
+sub pretty_exponents {
+	$_[0] =~ s/0/⁰/g; $_[0] =~ s/1/¹/g; $_[0] =~ s/2/²/g;
+	$_[0] =~ s/3/³/g; $_[0] =~ s/4/⁴/g; $_[0] =~ s/5/⁵/g;
+	$_[0] =~ s/6/⁶/g; $_[0] =~ s/7/⁷/g; $_[0] =~ s/8/⁸/g;
+	$_[0] =~ s/9/⁹/g; $_[0] =~ s/-/⁻/g;
+	# Returns $_[0]; <-- In all its Unicode glory!
+}
+
+sub ifHelp() {
+	print 'For multiplication:\n';
+	print 'This program understands asterisk ("*") and appropriate juxtapositions (i.e. "8x").';
+	print 'For exponentiation:\n';
+	print 'It understands caret ("^").\n'; 
+	print 'Example input:\n';
+	print '2x^6 - 48*x^5 + 3*x^2 + 2\n';
+}
+
+# Make a command-line args for: 
+# * no unicode.
+# * do not re-organize output.
+
+# Specs plan: to be able to instantly coefficients that are products 
+# of numbers.
+# Maybe handling parentheses well?
+# Maybe multi-character variables?
+
+# &output_fcn(@deriv_exps, @deriv_coeffs, @deriv_vars);
+
+# Thwarted because I can't remember if I can pass a list of lists to a subroutine.
+# Guess I could use a couple global lists.
+# Maybe it would concatenate them into 1 long list if I did it "right." Hmmm.
+#
+# sub output_fcn(my @exps_o, my @coeffs_o, my @vars_o) {
+# 	while ((my $index2, my $cur_d_exp) = each (@exps_o)) {
+# 		if  (($coeffs_o[$index2] != 0) && ($exps_o[$index2] != 1)) {
+# 			print "$deriv_coeffs[$index2]*$deriv_vars[$index2]^$cur_d_exp + " ; 
+# 		}
+# 		else {
+# 			if ($exps_o[$index2] == 1) {
+# 				print "$deriv_coeffs[$index2]*$deriv_vars[$index2] + " ; 
+# 			}
+# 			if($coeffs_o[$index2] == 0) { # silently skip. }
+# 		}
+# 	}
+# 	printf "\n";
+# } 
+
+# Stuff 2 work on:
+# 3.9 See if you can get it to take input like 2/3x^3
+# 3.92 Multiply numbers in the coeff., i.e.: 3*7*8x^5
+# 3.93 differentiate w.r.t. a variable other than x.
+# 3.94 treat variables other than the one u diff. w.r.t. as constants.
+# 4. Command-line argument processing for -h. <-- Boring.
+# 5. Make the polynomial output a separate subroutine? <-- Nonessential.
+# 9.3 Put everything in a STDIN loop... to receive multiple equations.
+#     (This is a good idea, b/c it allows huge batches of data.)
+#     9.3 A. Will I... store their data all in the same list?!?!
+#           9.3 A. i. Can we put > 1 "undef" in a list?
+#     9.3 B. ...and just ouput deriv's at the end?
+# 9.4 Print fcn diff'd right before the derivative. <-- as an end-user, want.
+# 10. Gather like terms. (in case of differentiating 5x^2 - x^3 + 4x^2) <-- Fun.
+# 11. Print in terms order highest exponent --> lowest exponent.
+# 12. Include "Oh, you don't wanna use unicode? Okey-dokey!" option.
+
+# Done:
+# 1. Writing split_terms subroutine. <-- DONE.
+# 2. Making data for the 3 sample lists.  <-- DONE.
+# 3. Finding the derivative for non-user-input lists. <-- pretty much DONE.
+# 6. Unicode exponents: ⁰¹²³⁴⁵⁶⁷⁸⁹ <3 <-- DONE. except no "/".
+# 6.5. Switch + - to - in final ouptut. <-- DONE.
+# 8. Deal with the + - + - possibilities in input. <-- DONE.
+
+# Considered for the long term: <-- Probably won't do it though.
+# Polynomial multiplication.
+# (x^6 - x^3 + 1)(3x^3 - x^2 + x + 6).
+#    3x*7x^4*x^2*(-8)*x^3
+#
